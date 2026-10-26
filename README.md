@@ -4,9 +4,9 @@ Upload a document (PDF, Word or text), ask a question, and get an answer that co
 
 This is a RAG (retrieval-augmented generation) project built in Python: it finds the most relevant parts of a document with sentence embeddings, then asks Gemini to answer using only those parts.
 
-**Demo video:** [Watch the 90-second demo](ADD-YOUR-VIDEO-LINK-HERE)
+**Demo video:** [Watch the 60-second demo](https://youtu.be/6iyVzyxFwpg?si=lZOjvY4NkczEclEj)
 
-![Screenshot of the app answering a question with sources](docs/screenshot.png)
+![Screenshot of the app answering a question with sources](ai-service/public/Ai-research.png)
 
 ---
 
