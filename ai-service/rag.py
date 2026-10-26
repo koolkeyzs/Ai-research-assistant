@@ -51,6 +51,7 @@ def extract_text(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
     reader = PdfReader(pdf_path)
+    page_count = len(reader.pages)
 
     content = ""
 
@@ -58,9 +59,10 @@ def extract_text(pdf_path):
         page_text = page.extract_text() or ""
         content += page_text + "\n"
 
-    if not content.strip():
+    if len(content.strip()) < 50 * max(1, page_count):
         raise ValueError(
-            "No text found. The PDF may be scanned and need OCR."
+            "This PDF has almost no extractable text. "
+            "It looks scanned and would need OCR."
         )
 
     return content
