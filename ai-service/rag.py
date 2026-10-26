@@ -3,8 +3,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError, PdfStreamError
+from docx import Document
 from sentence_transformers import SentenceTransformer, util
 from google import genai
+import time
+from google.genai import errors
 
 
 
@@ -44,29 +48,67 @@ def get_model():
 # 3. EXTRACT TEXT FROM A PDF
 
 
-def extract_text(pdf_path):
-    pdf_path = Path(pdf_path)
+def _read_pdf(path):
+    try:
+        reader = PdfReader(path)
+        page_count = len(reader.pages)
 
-    if not pdf_path.is_file():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
-
-    reader = PdfReader(pdf_path)
-    page_count = len(reader.pages)
-
-    content = ""
-
-    for page in reader.pages:
-        page_text = page.extract_text() or ""
-        content += page_text + "\n"
+        content = ""
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            content += page_text + "\n"
+    except (PdfReadError, PdfStreamError) as exc:
+        raise ValueError(
+            "This PDF is damaged or not a valid PDF file."
+        ) from exc
 
     if len(content.strip()) < 50 * max(1, page_count):
         raise ValueError(
             "This PDF has almost no extractable text. "
             "It looks scanned and would need OCR."
         )
-
     return content
 
+
+def _read_docx(path):
+    doc = Document(path)
+    parts = [p.text for p in doc.paragraphs]
+
+    for table in doc.tables:
+        for row in table.rows:
+            parts.append(" | ".join(cell.text for cell in row.cells))
+
+    content = "\n".join(parts)
+    if not content.strip():
+        raise ValueError("No text found in this Word document.")
+    return content
+
+
+def _read_txt(path):
+    content = path.read_text(encoding="utf-8", errors="ignore")
+    if not content.strip():
+        raise ValueError("This text file is empty.")
+    return content
+
+
+def extract_text(file_path):
+    file_path = Path(file_path)
+
+    if not file_path.is_file():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    suffix = file_path.suffix.lower()
+
+    if suffix == ".pdf":
+        return _read_pdf(file_path)
+    if suffix == ".docx":
+        return _read_docx(file_path)
+    if suffix == ".txt":
+        return _read_txt(file_path)
+
+    raise ValueError(
+        f"Unsupported file type: {suffix}. Use PDF, DOCX or TXT."
+    )
 
 
 # 4. SPLIT TEXT INTO CHUNKS
@@ -208,24 +250,33 @@ Answer:
 # 9. ASK GEMINI TO GENERATE AN ANSWER
 
 
-def generate_answer(question, chunks):
+def generate_answer(question, chunks, max_attempts=3):
     prompt = build_prompt(question, chunks)
 
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            if not response.text:
+                raise RuntimeError("Gemini returned an empty response.")
+            return response.text.strip()
 
-    except Exception as exc:
-        raise RuntimeError(
-            f"Gemini request failed: {exc}"
-        ) from exc
+        except errors.ServerError as exc:
+            # 5xx errors like 503 are temporary, so wait and try again
+            if attempt == max_attempts:
+                raise RuntimeError(
+                    f"Gemini unavailable after {max_attempts} attempts: {exc}"
+                ) from exc
+            time.sleep(2 ** attempt)  # waits 2s, then 4s
 
-    if not response.text:
-        raise RuntimeError("Gemini returned an empty response.")
+        except RuntimeError:
+            raise
 
-    return response.text.strip()
+        except Exception as exc:
+            # Bad key, wrong model name, etc. won't fix themselves
+            raise RuntimeError(f"Gemini request failed: {exc}") from exc
 
 
 

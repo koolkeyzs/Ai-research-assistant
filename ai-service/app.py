@@ -7,12 +7,12 @@ from rag import extract_text, chunk_text, embed_chunks, ask
 
 st.set_page_config(page_title="AI Research Assistant", page_icon="📄")
 st.title("AI Research Assistant")
-st.caption("Upload a PDF and ask questions. Answers come only from the document.")
+st.caption("Upload a PDF or DOC and ask questions. Answers come only from the document.")
 
 
-@st.cache_resource(show_spinner="Reading and embedding the PDF...")
-def process_pdf(file_bytes: bytes):
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+@st.cache_resource(show_spinner="Reading and embedding the document...")
+def process_document(file_bytes: bytes, suffix: str):
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(file_bytes)
         tmp_path = Path(tmp.name)
     try:
@@ -23,15 +23,15 @@ def process_pdf(file_bytes: bytes):
         tmp_path.unlink(missing_ok=True)
     return chunks, embeddings
 
-
-uploaded = st.file_uploader("Upload a PDF", type="pdf")
+uploaded = st.file_uploader("Upload a document", type=["pdf", "docx", "txt"])
 
 if uploaded is None:
-    st.info("Upload a PDF to begin.")
+    st.info("Upload a PDF, Word or text file to begin.")
     st.stop()
 
 try:
-    chunks, embeddings = process_pdf(uploaded.getvalue())
+    suffix = Path(uploaded.name).suffix.lower()
+    chunks, embeddings = process_document(uploaded.getvalue(), suffix)
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
