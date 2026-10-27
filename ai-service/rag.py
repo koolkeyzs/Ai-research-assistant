@@ -45,7 +45,7 @@ def get_model():
 
 
 
-# 3. EXTRACT TEXT FROM A PDF
+# 3. EXTRACT TEXT FROM A PDF , DOCX AND TXT
 
 
 def _read_pdf(path):
@@ -264,7 +264,6 @@ def generate_answer(question, chunks, max_attempts=3):
             return response.text.strip()
 
         except errors.ServerError as exc:
-            # 5xx errors like 503 are temporary, so wait and try again
             if attempt == max_attempts:
                 raise RuntimeError(
                     f"Gemini unavailable after {max_attempts} attempts: {exc}"
@@ -275,7 +274,6 @@ def generate_answer(question, chunks, max_attempts=3):
             raise
 
         except Exception as exc:
-            # Bad key, wrong model name, etc. won't fix themselves
             raise RuntimeError(f"Gemini request failed: {exc}") from exc
 
 
